@@ -1,5 +1,11 @@
 file_name = "Manuscript-4.tex"
+title = ""
+author = ""
+
 import re
+
+author = ""
+title = ""
 
 if "tex" in file_name:
 
@@ -11,6 +17,45 @@ if "tex" in file_name:
     text = text.replace('\\[', '\\begin{equation}')
     text = text.replace('\\]', '\\end{equation}')
 
+
+    # parse for title information in the following after \\maketitle
+    # title
+    # author
+
+    if author == "" and title == "":
+        lines = text.split("\n")
+        foundTitle = False
+        for line in lines:
+            if "\\maketitle" in line:
+                foundTitle = True
+                continue
+            if foundTitle:
+                if len(line) > 0 :
+                    if author == "" and title != "":
+                        author = line
+                        break
+                    if title == "" :
+                        title = line
+
+    # Set the author and title information
+    lines = text.split("\n")
+    text = ""
+    foundTitle = False
+    for line in lines:
+        if "\\maketitle" in line:
+            foundTitle = True
+            text += line + "\n"
+            continue
+        elif "\\title" in line:
+            line = "\\title{" + title + "}"
+        elif "\\author" in line:
+            line = "\\author{" + author + "}"
+        elif foundTitle :
+            if "\\tableofcontents" in line:
+                foundTitle = False
+            else:
+                continue
+        text += line + "\n"
 
 
 
@@ -172,7 +217,7 @@ if "tex" in file_name:
     startRef = False
     atRef = False
     refs = []
-    refsOrder = []
+
     r = 0
     for line in lines:
         line = line.replace("{","").replace("}", "").replace("\\emph", "")
@@ -181,9 +226,8 @@ if "tex" in file_name:
         if startRef and "]:" in line:
             r += 1
             refName = line.split("]:")[0].split("[")[1]
-            print("\tReference " +str(r) + " " + refName + ":\t\t" + line.split("]:")[1] + "..")
+            print("\t" + refName + ":\t\t" + line.split("]:")[1] + "..")
             refs.append(refName)
-            refsOrder.append(0)
 
 
 
@@ -191,6 +235,7 @@ if "tex" in file_name:
     # Have to search for citations word by word because there may be multiple citations in a single line and the ordering will be
     # messed up if we just parse line by line
     print("\nDetermining citation order by parsing text.")
+    refsOrder = [0]*len(refs)
     lines = text.split("\n")
     l = 0
     refsCount = 1
@@ -236,12 +281,12 @@ if "tex" in file_name:
             text += line + "\n";
         elif startRef:
             temp = line.replace("}:", "}")
-            temp = line.replace("cite", "bibitem")
+            temp = temp.replace("cite", "bibitem")
             if 'bibitem' in temp:
                 r += 1
                 refStrings.append(temp)
             elif len(temp.replace(' ', '')) > 0 :
-                refStrings[r] += temp
+                refStrings[r] += temp.replace("\\end{document}", "")
         else:
             text += line + "\n";
 
@@ -251,8 +296,6 @@ if "tex" in file_name:
     while( r < len(refsOrder) ):
         if refsOrder[r] == 0:
             unused.append(refs[r])
-            refsOrder.remove(refsOrder[r])
-            r -= 1
         r += 1
 
 
@@ -260,13 +303,14 @@ if "tex" in file_name:
     ors = 0
     used = [""]*len(refsOrder)
     while (ors < len(refsOrder)):
-        used[refsOrder[ors]-1] = refs[ors]
+        if refs[ors] not in unused:
+            used[refsOrder[ors]-1] = refs[ors]
         ors += 1
 
     # Now print the reference strings in the correct order
     for ref in used:
         for rs in refStrings:
-            if ref in rs:
+            if "{"+ref+"}" in rs and not ref.replace(" ", "") == "":
                 text += rs + "\n"
 
     # Print the unused ones as well
@@ -301,9 +345,21 @@ if "tex" in file_name:
     print("Done parsing For errors in citations:")
 
 
+    #Miscelaneous fixes
+    # Add some hardcoded margins otherwise the page numbers will overlap the text
+    text = text.replace("\\begin{document}", "\\usepackage[a4paper, total={6in, 8in}]{geometry} \n\n \\begin{document}")
+    #Fix figures and tables floating around
+    text = text.replace("\\begin{figure}", "\\begin{figure}[h]")
+    text = text.replace("\\begin{longtable}[]", "\\begin{longtable}[h]")
 
-f = open("_"+file_name, "w")
-f.write(text)
-f.close()
+
+
+    f = open("_"+file_name, "w")
+    f.write(text)
+    f.close()
+
+
+
+
 
 
